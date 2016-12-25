@@ -1,73 +1,204 @@
 // @flow
 import React, { Component } from 'react';
 import { Link } from 'react-router';
+
 import fs from 'fs';
 import path from 'path';
 import electron from 'electron';
 import styles from './Home.css';
 
-const { app } = electron.remote;
+// Helper to get the electron app directory
+const getElectronAppDirectory = (electronInstance) => {
+  const appPath = electronInstance.remote.app.getAppPath();
+  return path.dirname(appPath);
+};
 
-function file(theFilename) {
+// Helper to make sure that files are created
+// in the correct electron subdirectory
+const makeElectronPath = (subPath) => {
   // Get the path to Electron's storage
-  const dir = path.dirname(app.getAppPath());
-  // Add the filename to that directory
-  return path.join(dir, theFilename);
-}
+  const fullpath = path.join(getElectronAppDirectory(electron), subPath);
+  mkdirp(fullpath);
+  return fullpath;
+};
+
+// Helper to get paths of files in the electron audio directory
+const audioFile = (theFilename) => path.join(makeElectronPath('audio'), theFilename);
+
+// Synchronously checks if a path exists
+const directoryExists = (dpath) => {
+  try {
+    return fs.lstatSync(dpath).isDirectory();
+  } catch (e) {
+    return false;
+  }
+};
+
+// Synchronously creates a directory
+const mkdirp = (dirname) => {
+  const nDirname = path.normalize(dirname).split(path.sep);
+  nDirname.forEach((sdir, index) => {
+    const pathInQuestion = nDirname.slice(0, index + 1).join(path.sep);
+    if ((!directoryExists(pathInQuestion)) && pathInQuestion) fs.mkdirSync(pathInQuestion);
+  });
+};
+
+// Asynchronously convert a blob to a base64 string
+const blobToBase64 = (blob, cb) => {
+  const reader = new FileReader();
+  reader.onload = function () {
+    const dataUrl = reader.result;
+    const base64 = dataUrl.split(',')[1];
+    cb(base64);
+  };
+  reader.readAsDataURL(blob);
+};
+
+// Synchronously write a file to a path
+const writeFileSync = (filePath, contents) => {
+  try {
+    fs.writeFileSync(filePath, contents, 'utf-8');
+    console.log('Just wrote to a file. Run this command to see the contents:');
+    console.log(`cat ${audioFile(filePath)}`);
+  } catch (e) {
+    alert('Failed to save the file !');
+  }
+};
+
+// Asynchronously write a file to an absolute path
+const writeFile = (filePath, contents, cb) => {
+  try {
+    console.log('Writing to a file. Run this command to see the contents:');
+    console.log(`cat ${filePath}`);
+    fs.writeFile(filePath, contents, cb);
+  } catch (e) {
+    alert('Failed to save the file !');
+  }
+};
+
+// Synchronously read a file's contents
+const readFile = (filename) => {
+  try {
+    const fileContents = fs.readFileSync(filename, 'utf-8');
+    console.log('Just read from a file. Here are the contents:', fileContents);
+    return fileContents;
+  } catch (e) {
+    alert('Failed to read the file!');
+  }
+};
 
 export default class Home extends Component {
-  onWriteButtonClick() {
-    try {
-      fs.writeFileSync(file('Yo'), 'OH HEYYYYYY', 'utf-8');
-      console.log('Just wrote to a file. Run this command to see the contents:');
-      console.log('cat ' + file('Yo'));
-    } catch (e) {
-      alert('Failed to save the file !');
-    }
-  }
-  onReadButtonClick() {
-    try {
-      const fileContents = fs.readFileSync(file('Yo'), 'utf-8');
-      console.log('Just read from a file. Here are the contents:', fileContents);
-    } catch (e) {
-      alert('Failed to read the file!');
-    }
+  constructor(props) {
+    super(props);
+    this.state = {
+      mediaStream: {},
+      mediaRecorder: {}
+    };
   }
   getAudio() {
-    // Prefer camera resolution nearest to 1280x720.
-    var constraints = { audio: true, video: false };
-    var usermedia = navigator.mediaDevices.getUserMedia(constraints)
+    // Get audio using the user's microphone
+    window.navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: false
+    })
     .then((mediaStream) => {
-      console.log(mediaStream.getTracks());
-      this.setState({
-        mediaStream
-      });
-      
-      var audio = document.querySelector('audio');
+      // Use a media recorder to record the stream
+      const mediaRecorder = new MediaRecorder(mediaStream);
+
+      // An array of all of the chunks of audio we'll hold
+      // See https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/ondataavailable
+      const chunks = [];
+
+      // When the media recorder is stopped, get the final audio
+      mediaRecorder.onstop = () => {
+        console.log('data available after MediaRecorder.stop() called.');
+
+        // Take all of the chunks of bytes and put them together into a blob
+        const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+
+        // Convert the blob to a base 64 encoded string
+        blobToBase64(blob, (base64) => {
+          // Create a buffer from the base64 encoded string
+          const buf = new Buffer(base64, 'base64');
+
+          // Write the buffer to a file
+          writeFile(audioFile('test.ogg'), buf, (err) => {
+            if (err) {
+              console.log('err', err);
+            } else {
+              return console.log({ status: 'success' });
+            }
+          });
+        });
+      };
+
+      // Fires whenever a new chunk of data is available from the recorder
+      mediaRecorder.ondataavailable = (e) => {
+        chunks.push(e.data);
+      };
+
+      // Fires if there is an error during media recording
+      mediaRecorder.onerror = (err) => {
+        console.log(err);
+      };
+
+      // Start the media recorder
+      mediaRecorder.start();
+
+      // Create an element on the page to play the audio while it is
+      // being recorded
+      const audio = document.querySelector('#audio-one');
+
+      // Set its source to the live stream
       audio.srcObject = mediaStream;
-      audio.onloadedmetadata = function(e) {
+
+      // When the initial load happens, play immediately
+      audio.onloadedmetadata = () => {
         audio.play();
       };
+
+      // Store the media stream in state, we'll need this when
+      // the user decides to stop recording and we want to get
+      // a blob representing the recording
+      this.setState({
+        mediaRecorder,
+        mediaStream,
+        audioElement: audio
+      });
+
+      return {
+        mediaStream,
+        audioElement: audio
+      };
     })
-    .catch(function(err) { console.log(err.name + ": " + err.message); }); // always check for errors at the end.
-    this.setState({usermedia});
+    .catch((err) => { console.error(`${err.name} : ${err.message}`); }); // always check for errors at the end.
   }
   stop() {
-    // Loop over all streams (audio is 0, video is 1);
-    this.state.mediaStream.getTracks().map((stream) => {
-      stream.stop();
-    })
-    
+    // Stop the media recorder
+    this.state.mediaRecorder.stop();
+
+    // Loop over all audio tracks
+    this.state.mediaStream.getAudioTracks().map((track) => {
+      // Stop each track
+      track.stop();
+      return track;
+    });
+
+    // Stops the audio element and resets the time to 0,
+    // TODO: Get the play button to actually replay the last audio recorded.
+    this.state.audioElement.pause();
+    this.state.audioElement.currentTime = 0;
   }
   render() {
     return (
       <div>
         <div className={styles.container}>
           <h2>Home</h2>
-          <audio />
-          <Link to="/counter">to Counter</Link><br/>
-          <button onClick={this.onWriteButtonClick.bind(this)}>Write</button>
-          <button onClick={this.onReadButtonClick.bind(this)}>Read</button>
+          <audio id="audio-one" controls="true" />
+          <audio id="audio-two" controls="true" />
+          <Link to="/counter">to Counter</Link><br />
+          <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
+          <button onClick={readFile.bind(this, 'Yo')}>Read</button>
           <button onClick={this.getAudio.bind(this)}>Record</button>
           <button onClick={this.stop.bind(this)}>Stop</button>
         </div>
