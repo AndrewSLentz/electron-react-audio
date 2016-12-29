@@ -5,7 +5,10 @@ import { Link } from 'react-router';
 import fs from 'fs';
 import path from 'path';
 import electron from 'electron';
+import fileType from 'file-type';
+import readChunk from 'read-chunk';
 import styles from './Home.css';
+
 
 // Helper to get the electron app directory
 const getElectronAppDirectory = (electronInstance) => {
@@ -46,7 +49,7 @@ const mkdirp = (dirname) => {
 // Asynchronously convert a blob to a base64 string
 const blobToBase64 = (blob, cb) => {
   const reader = new FileReader();
-  reader.onload = function () {
+  reader.onload = () => {
     const dataUrl = reader.result;
     const base64 = dataUrl.split(',')[1];
     cb(base64);
@@ -92,8 +95,26 @@ export default class Home extends Component {
     super(props);
     this.state = {
       mediaStream: {},
-      mediaRecorder: {}
+      mediaRecorder: {},
+      files: []
     };
+  }
+  componentDidMount() {
+    this.getAudioFiles();
+  }
+  getAudioFiles() {
+    fs.readdir(makeElectronPath('audio'), (err, files) => {
+      console.log(files);
+      const audioFiles = files.filter((file) => {
+        const buffer = readChunk.sync(audioFile(file), 0, 4100);
+        const fileInfo = fileType(buffer);
+        console.log(fileInfo);
+        return fileInfo !==null && fileInfo.mime === 'audio/ogg';
+      });
+      this.setState({
+        files: audioFiles
+      });
+    });
   }
   getAudio() {
     // Get audio using the user's microphone
@@ -103,7 +124,7 @@ export default class Home extends Component {
     })
     .then((mediaStream) => {
       // Use a media recorder to record the stream
-      const mediaRecorder = new MediaRecorder(mediaStream);
+      const mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
 
       // An array of all of the chunks of audio we'll hold
       // See https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/ondataavailable
@@ -114,7 +135,7 @@ export default class Home extends Component {
         console.log('data available after MediaRecorder.stop() called.');
 
         // Take all of the chunks of bytes and put them together into a blob
-        const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+        const blob = new Blob(chunks, { type: 'audio/webm; codecs=opus' });
 
         // Convert the blob to a base 64 encoded string
         blobToBase64(blob, (base64) => {
@@ -122,7 +143,7 @@ export default class Home extends Component {
           const buf = new Buffer(base64, 'base64');
 
           // Write the buffer to a file
-          writeFile(audioFile('test.ogg'), buf, (err) => {
+          writeFile(audioFile('test.webm'), buf, (err) => {
             if (err) {
               console.log('err', err);
             } else {
@@ -193,14 +214,16 @@ export default class Home extends Component {
     return (
       <div>
         <div className={styles.container}>
-          <h2>Home</h2>
-          <audio id="audio-one" controls="true" />
-          <audio id="audio-two" controls="true" />
+          <h2>Record</h2>
+          <audio id="audio-one" />
           <Link to="/counter">to Counter</Link><br />
           <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
           <button onClick={readFile.bind(this, 'Yo')}>Read</button>
           <button onClick={this.getAudio.bind(this)}>Record</button>
           <button onClick={this.stop.bind(this)}>Stop</button>
+          <ul>
+            {this.state.files.map((file) => <li>{file}</li>)}
+          </ul>
         </div>
       </div>
     );
