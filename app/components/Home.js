@@ -2,49 +2,90 @@
 import React, { Component } from 'react';
 import { Link } from 'react-router';
 
-import fs from 'fs';
+import fs from 'fs-extra';
 import path from 'path';
-import electron from 'electron';
 import fileType from 'file-type';
 import readChunk from 'read-chunk';
+import uuid from 'uuid';
+import * as RxDB from 'rxdb';
+import pouchWebSQL from 'pouchdb-adapter-websql';
+import pouchHTTP from 'pouchdb-adapter-http';
+import pouchReplication from 'pouchdb-replication';
+import { makeElectronPath } from './electron-utils';
 import styles from './Home.css';
 
+console.log(RxDB);
 
-// Helper to get the electron app directory
-const getElectronAppDirectory = (electronInstance) => {
-  const appPath = electronInstance.remote.app.getAppPath();
-  return path.dirname(appPath);
+// Setup offline data sync
+RxDB.plugin(pouchWebSQL);
+RxDB.plugin(pouchHTTP);
+RxDB.plugin(pouchReplication);
+
+const audioSchema = {
+  title: 'audio schema',
+  description: 'describes a simple audio file',
+  type: 'object',
+  properties: {
+    name: {
+      type: 'string',
+      primary: 'true'
+    },
+    description: {
+      type: 'string'
+    },
+    createdAt: {
+      type: 'string'
+    },
+  },
+  required: ['createdAt']
 };
 
-// Helper to make sure that files are created
-// in the correct electron subdirectory
-const makeElectronPath = (subPath) => {
-  // Get the path to Electron's storage
-  const fullpath = path.join(getElectronAppDirectory(electron), subPath);
-  mkdirp(fullpath);
-  return fullpath;
-};
+console.log(`hostname: ${window.location.hostname}`);
+const syncURL = `http://${window.location.hostname}:10102/`;
+
+let database, column;
+
+RxDB
+  .create('audioDB', 'websql', 'ASDFASDF', true)
+  .then((db) => {
+    database = db;
+    return db.collection('audio', audioSchema);
+  })
+  .then((col) => {
+    column = col;
+    return column;
+  })
+  // .then((col) => {
+  //   console.log('DatabaseService: sync');
+  //   col.sync(`${syncURL}hero/`);
+  //   return col;
+  // })
+  .then((col) => {
+    return col
+      .query()
+      .sort({
+        name: 1
+      })
+      .$.subscribe((heroes) => {
+        if (!heroes) {
+          // heroesList.innerHTML = 'Loading..';
+          return;
+        }
+        console.log('observable fired');
+        console.dir(heroes);
+        // heroesList.innerHTML = '';
+        // heroes.forEach(function(hero) {
+        //     heroesList.innerHTML = heroesList.innerHTML +
+        //         '<li>' +
+        //         '<div class="color-box" style="background:' + hero.get('color') + '"></div>' +
+        //         '<div class="name">' + hero.get('name') + '</div>' +
+        //         '</li>'
+        // });
+      });
+  });
 
 // Helper to get paths of files in the electron audio directory
 const audioFile = (theFilename) => path.join(makeElectronPath('audio'), theFilename);
-
-// Synchronously checks if a path exists
-const directoryExists = (dpath) => {
-  try {
-    return fs.lstatSync(dpath).isDirectory();
-  } catch (e) {
-    return false;
-  }
-};
-
-// Synchronously creates a directory
-const mkdirp = (dirname) => {
-  const nDirname = path.normalize(dirname).split(path.sep);
-  nDirname.forEach((sdir, index) => {
-    const pathInQuestion = nDirname.slice(0, index + 1).join(path.sep);
-    if ((!directoryExists(pathInQuestion)) && pathInQuestion) fs.mkdirSync(pathInQuestion);
-  });
-};
 
 // Asynchronously convert a blob to a base64 string
 const blobToBase64 = (blob, cb) => {
@@ -109,7 +150,7 @@ export default class Home extends Component {
         const buffer = readChunk.sync(audioFile(file), 0, 4100);
         const fileInfo = fileType(buffer);
         console.log(fileInfo);
-        return fileInfo !==null && fileInfo.mime === 'audio/ogg';
+        return fileInfo !== null && fileInfo.mime.indexOf('webm');
       });
       this.setState({
         files: audioFiles
@@ -135,7 +176,7 @@ export default class Home extends Component {
         console.log('data available after MediaRecorder.stop() called.');
 
         // Take all of the chunks of bytes and put them together into a blob
-        const blob = new Blob(chunks, { type: 'audio/webm; codecs=opus' });
+        const blob = new Blob(chunks, { type: 'audio/webm;' });
 
         // Convert the blob to a base 64 encoded string
         blobToBase64(blob, (base64) => {
@@ -143,10 +184,11 @@ export default class Home extends Component {
           const buf = new Buffer(base64, 'base64');
 
           // Write the buffer to a file
-          writeFile(audioFile('test.webm'), buf, (err) => {
+          writeFile(audioFile(uuid.v4() + '.webm'), buf, (err) => {
             if (err) {
               console.log('err', err);
             } else {
+              this.getAudioFiles();
               return console.log({ status: 'success' });
             }
           });
@@ -210,6 +252,15 @@ export default class Home extends Component {
     this.state.audioElement.pause();
     this.state.audioElement.currentTime = 0;
   }
+  deleteAudio(file) {
+    fs.remove(file, (err) => {
+      if (err) {
+        return console.error(err);
+      }
+      console.log('deleted', file);
+      this.getAudioFiles();
+    });
+  }
   render() {
     return (
       <div>
@@ -221,8 +272,18 @@ export default class Home extends Component {
           <button onClick={readFile.bind(this, 'Yo')}>Read</button>
           <button onClick={this.getAudio.bind(this)}>Record</button>
           <button onClick={this.stop.bind(this)}>Stop</button>
-          <ul>
-            {this.state.files.map((file) => <li>{file}</li>)}
+          <ul style={{ height: 400, overflow: 'scroll' }}>
+            {this.state.files.map((file, index) => <li
+              style={{
+                display: 'block',
+                height: 100,
+                background: '#fff',
+                margin: 5,
+                color: '#333',
+                width: 300
+              }}
+              key={index}
+            ><audio src={audioFile(file)} controls="true" loop="loop" />{file}<button onClick={this.deleteAudio.bind(this, audioFile(file))}>Delete</button></li>)}
           </ul>
         </div>
       </div>
