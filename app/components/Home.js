@@ -45,45 +45,6 @@ const syncURL = `http://${window.location.hostname}:10102/`;
 
 let database, column;
 
-RxDB
-  .create('audioDB', 'websql', 'ASDFASDF', true)
-  .then((db) => {
-    database = db;
-    return db.collection('audio', audioSchema);
-  })
-  .then((col) => {
-    column = col;
-    return column;
-  })
-  // .then((col) => {
-  //   console.log('DatabaseService: sync');
-  //   col.sync(`${syncURL}hero/`);
-  //   return col;
-  // })
-  .then((col) => {
-    return col
-      .query()
-      .sort({
-        name: 1
-      })
-      .$.subscribe((heroes) => {
-        if (!heroes) {
-          // heroesList.innerHTML = 'Loading..';
-          return;
-        }
-        console.log('observable fired');
-        console.dir(heroes);
-        // heroesList.innerHTML = '';
-        // heroes.forEach(function(hero) {
-        //     heroesList.innerHTML = heroesList.innerHTML +
-        //         '<li>' +
-        //         '<div class="color-box" style="background:' + hero.get('color') + '"></div>' +
-        //         '<div class="name">' + hero.get('name') + '</div>' +
-        //         '</li>'
-        // });
-      });
-  });
-
 // Helper to get paths of files in the electron audio directory
 const audioFile = (theFilename) => path.join(makeElectronPath('audio'), theFilename);
 
@@ -141,7 +102,50 @@ export default class Home extends Component {
     };
   }
   componentDidMount() {
-    this.getAudioFiles();
+    this.getAudioMetadata();
+  }
+  getAudioMetadata() {
+    RxDB
+      .create('audioDB', 'websql', 'ASDFASDF', true)
+      .then((db) => {
+        database = db;
+        return db.collection('audio', audioSchema);
+      })
+      .then((col) => {
+        column = col;
+        return column;
+      })
+      // .then((col) => {
+      //   console.log('DatabaseService: sync');
+      //   col.sync(`${syncURL}hero/`);
+      //   return col;
+      // })
+      .then((col) => {
+        return col
+          .query()
+          .sort({
+            name: 1
+          })
+          .$.subscribe((audios) => {
+            if (!audios) {
+              // heroesList.innerHTML = 'Loading..';
+              return;
+            }
+            console.log('observable fired');
+            this.setState({
+              files: audios
+            });
+            console.dir(audios);
+            // heroesList.innerHTML = '';
+            // heroes.forEach(function(hero) {
+            //     heroesList.innerHTML = heroesList.innerHTML +
+            //         '<li>' +
+            //         '<div class="color-box" style="background:' + hero.get('color') + '"></div>' +
+            //         '<div class="name">' + hero.get('name') + '</div>' +
+            //         '</li>'
+            // });
+          });
+      });
   }
   getAudioFiles() {
     fs.readdir(makeElectronPath('audio'), (err, files) => {
@@ -170,7 +174,19 @@ export default class Home extends Component {
       // An array of all of the chunks of audio we'll hold
       // See https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/ondataavailable
       const chunks = [];
+      const id = uuid.v4();
 
+      mediaRecorder.onstart = () => {
+        const obj = {
+          name: id,
+          description: 'This is a test',
+          createdAt: 'Today'
+        };
+        console.log('inserting audio:');
+        console.dir(obj);
+        column.insert(obj);
+      };
+      
       // When the media recorder is stopped, get the final audio
       mediaRecorder.onstop = () => {
         console.log('data available after MediaRecorder.stop() called.');
@@ -184,7 +200,7 @@ export default class Home extends Component {
           const buf = new Buffer(base64, 'base64');
 
           // Write the buffer to a file
-          writeFile(audioFile(uuid.v4() + '.webm'), buf, (err) => {
+          writeFile(audioFile(id + '.webm'), buf, (err) => {
             if (err) {
               console.log('err', err);
             } else {
@@ -273,17 +289,30 @@ export default class Home extends Component {
           <button onClick={this.getAudio.bind(this)}>Record</button>
           <button onClick={this.stop.bind(this)}>Stop</button>
           <ul style={{ height: 400, overflow: 'scroll' }}>
-            {this.state.files.map((file, index) => <li
-              style={{
-                display: 'block',
-                height: 100,
-                background: '#fff',
-                margin: 5,
-                color: '#333',
-                width: 300
-              }}
-              key={index}
-            ><audio src={audioFile(file)} controls="true" loop="loop" />{file}<button onClick={this.deleteAudio.bind(this, audioFile(file))}>Delete</button></li>)}
+            {this.state.files.map((fileRx, index) => {
+              const p = function(proxyObj) {
+                return new Proxy({}, {
+                  get: (target, name) => {
+                    return proxyObj.get(name);
+                  },
+                });
+              };
+              const file = p(fileRx);
+              console.log('name is ', file.name);
+              return (
+                <li
+                  style={{
+                    display: 'block',
+                    height: 100,
+                    background: '#fff',
+                    margin: 5,
+                    color: '#333',
+                    width: 300
+                  }}
+                  key={index}
+                >{file.name}<audio src={audioFile(file.name)} controls="true" loop="loop" />{file.name}<button onClick={this.deleteAudio.bind(this, audioFile(file.name))}>Delete</button></li>
+              );
+            })}
           </ul>
         </div>
       </div>
