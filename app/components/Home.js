@@ -1,4 +1,5 @@
 // @flow
+
 import React, { Component } from 'react';
 import { Link } from 'react-router';
 
@@ -18,6 +19,8 @@ import * as RxDB from 'rxdb';
 import pouchWebSQL from 'pouchdb-adapter-websql';
 import pouchHTTP from 'pouchdb-adapter-http';
 import pouchReplication from 'pouchdb-replication';
+
+import hash from 'object-hash';
 
 // For saving files in electron
 import { makeElectronPath } from './electron-utils';
@@ -47,9 +50,19 @@ const audioSchema = {
     createdAt: {
       type: 'string'
     },
+    isRecording: {
+      type: 'boolean'
+    },
   },
   required: ['createdAt']
 };
+
+const schemaHash = hash(audioSchema);
+const lastSchemaHash = localStorage.getItem('lastSchemaHash');
+if(lastSchemaHash !== schemaHash) {
+  localStorage.setItem('lashSchemaHash', schemaHash);
+  console.log('schema changed! the world was deleted!');
+}
 
 let database, column;
 
@@ -107,7 +120,7 @@ export default class Home extends Component {
       mediaStream: {},
       mediaRecorder: {},
       files: [],
-      sourceFile: '/Users/jim.cummins/projects/electron-react-audio/node_modules/electron/dist/Electron.app/Contents/Resources/audio/7238c8ce-3f7a-4ec3-ab96-e3ea16888e5e.webm'
+      audioMetadata: []
     };
   }
   componentDidMount() {
@@ -115,7 +128,7 @@ export default class Home extends Component {
   }
   getAudioMetadata() {
     RxDB
-      .create('audioDB', 'websql', 'ASDFASDF', true)
+      .create('audioDB_version_' + schemaHash, 'websql', 'ASDFASDF', true)
       .then((db) => {
         database = db;
         return db.collection('audio', audioSchema);
@@ -142,18 +155,21 @@ export default class Home extends Component {
             }
             console.log('observable fired');
             this.setState({
-              files: audios
+              audioMetadata: audios
             });
             console.dir(audios);
-            // heroesList.innerHTML = '';
-            // heroes.forEach(function(hero) {
-            //     heroesList.innerHTML = heroesList.innerHTML +
-            //         '<li>' +
-            //         '<div class="color-box" style="background:' + hero.get('color') + '"></div>' +
-            //         '<div class="name">' + hero.get('name') + '</div>' +
-            //         '</li>'
-            // });
           });
+      })
+      .catch((err) => {
+        database.destroy().then(() => {
+          // database destroyed
+          console.log('there was a conflict in the schema, so I deleted the world')
+          return true;
+        }).catch(function (er) {
+          // error occurred
+          console.error(er);
+        });
+        console.error(err);
       });
   }
   getAudioFiles() {
@@ -189,7 +205,8 @@ export default class Home extends Component {
         const obj = {
           name: id,
           description: 'This is a test',
-          createdAt: 'Today'
+          createdAt: 'Today',
+          // isRecording: true
         };
         console.log('inserting audio:');
         console.dir(obj);
@@ -213,7 +230,7 @@ export default class Home extends Component {
             if (err) {
               console.log('err', err);
             } else {
-              this.getAudioFiles();
+              this.getAudioMetadata();
               return console.log({ status: 'success' });
             }
           });
@@ -277,43 +294,39 @@ export default class Home extends Component {
     this.state.audioElement.pause();
     this.state.audioElement.currentTime = 0;
   }
-  deleteAudio(file) {
-    console.log(file.name);
+  deleteAudio(fileRx) {
+    const file = audioFile(`${fileRx.get('name')}.webm`);
+    fileRx.remove();
     fs.remove(file, (err) => {
       if (err) {
         return console.error(err);
       }
       console.log('deleted', file);
-      this.getAudioFiles();
+      this.getAudioMetadata();
     });
-  }
-  changeSourceFile() {
-    this.setState({ sourceFile: '/Users/jim.cummins/projects/electron-react-audio/node_modules/electron/dist/Electron.app/Contents/Resources/audio/4665802b-a7fe-4dea-86b5-d6861f29a672.webm' });
   }
   render() {
     return (
       <div>
         <div className={styles.container}>
           <h2>Record</h2>
-          <AudioPlayerDOM src={this.state.sourceFile} />
           <audio id="audio-one" />
           <Link to="/counter">to Counter</Link><br />
           <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
           <button onClick={readFile.bind(this, 'Yo')}>Read</button>
-          <button onClick={this.changeSourceFile.bind(this)}>Change Source</button>
           <button onClick={this.getAudio.bind(this)}>Record</button>
           <button onClick={this.stop.bind(this)}>Stop</button>
           <ul style={{ height: 400, overflow: 'scroll' }}>
-            {this.state.files.map((fileRx, index) => {
-              const p = function(proxyObj) {
-                return new Proxy({}, {
-                  get: (target, name) => {
-                    return proxyObj.get(name);
-                  },
-                });
-              };
-              const file = p(fileRx);
-              console.log('name is ', file.name);
+            {this.state.audioMetadata.map((fileRx, index) => {
+              // const p = function(proxyObj) {
+              //   return new Proxy({}, {
+              //     get: (target, name) => {
+              //       return proxyObj.get(name);
+              //     },
+              //   });
+              // };
+              // const file = p(fileRx);
+              console.log('name is ', fileRx.get('name'));
               return (
                 <li
                   style={{
@@ -325,7 +338,7 @@ export default class Home extends Component {
                     width: 300
                   }}
                   key={index}
-                >{file.name}<audio src={audioFile(file.name + '.webm')} controls="true" loop="loop" />{file.name}<button onClick={this.deleteAudio.bind(this, audioFile(file.name + '.webm'))}>Delete</button></li>
+                >{fileRx.get('name')}<AudioPlayerDOM src={audioFile(`${fileRx.get('name')}.webm`)} />{fileRx.get('name')}<button onClick={this.deleteAudio.bind(this, fileRx)}>Delete</button></li>
               );
             })}
           </ul>
