@@ -2,25 +2,36 @@
 import React, { Component } from 'react';
 import { Link } from 'react-router';
 
+// For working with files
 import fs from 'fs-extra';
 import path from 'path';
+
+// For determining what type of files something is
 import fileType from 'file-type';
 import readChunk from 'read-chunk';
+
+// For generating random ids
 import uuid from 'uuid';
+
+// A database that syncs and works offline!
 import * as RxDB from 'rxdb';
 import pouchWebSQL from 'pouchdb-adapter-websql';
 import pouchHTTP from 'pouchdb-adapter-http';
 import pouchReplication from 'pouchdb-replication';
+
+// For saving files in electron
 import { makeElectronPath } from './electron-utils';
 import styles from './Home.css';
 
-console.log(RxDB);
+// A react audio player that behaves!
+import AudioPlayerDOM from './AudioPlayerDOM';
 
-// Setup offline data sync
+// We need some plugins for offline data sync for our database
 RxDB.plugin(pouchWebSQL);
 RxDB.plugin(pouchHTTP);
 RxDB.plugin(pouchReplication);
 
+// This is a model to describe a single audio file in rxdb
 const audioSchema = {
   title: 'audio schema',
   description: 'describes a simple audio file',
@@ -39,9 +50,6 @@ const audioSchema = {
   },
   required: ['createdAt']
 };
-
-console.log(`hostname: ${window.location.hostname}`);
-const syncURL = `http://${window.location.hostname}:10102/`;
 
 let database, column;
 
@@ -63,8 +71,8 @@ const blobToBase64 = (blob, cb) => {
 const writeFileSync = (filePath, contents) => {
   try {
     fs.writeFileSync(filePath, contents, 'utf-8');
-    console.log('Just wrote to a file. Run this command to see the contents:');
-    console.log(`cat ${audioFile(filePath)}`);
+    console.log('Just wrote to a file. Run this command to open the file:');
+    console.log(`open ${audioFile(filePath)}`);
   } catch (e) {
     alert('Failed to save the file !');
   }
@@ -98,7 +106,8 @@ export default class Home extends Component {
     this.state = {
       mediaStream: {},
       mediaRecorder: {},
-      files: []
+      files: [],
+      sourceFile: '/Users/jim.cummins/projects/electron-react-audio/node_modules/electron/dist/Electron.app/Contents/Resources/audio/7238c8ce-3f7a-4ec3-ab96-e3ea16888e5e.webm'
     };
   }
   componentDidMount() {
@@ -186,7 +195,7 @@ export default class Home extends Component {
         console.dir(obj);
         column.insert(obj);
       };
-      
+
       // When the media recorder is stopped, get the final audio
       mediaRecorder.onstop = () => {
         console.log('data available after MediaRecorder.stop() called.');
@@ -269,6 +278,7 @@ export default class Home extends Component {
     this.state.audioElement.currentTime = 0;
   }
   deleteAudio(file) {
+    console.log(file.name);
     fs.remove(file, (err) => {
       if (err) {
         return console.error(err);
@@ -277,15 +287,20 @@ export default class Home extends Component {
       this.getAudioFiles();
     });
   }
+  changeSourceFile() {
+    this.setState({ sourceFile: '/Users/jim.cummins/projects/electron-react-audio/node_modules/electron/dist/Electron.app/Contents/Resources/audio/4665802b-a7fe-4dea-86b5-d6861f29a672.webm' });
+  }
   render() {
     return (
       <div>
         <div className={styles.container}>
           <h2>Record</h2>
+          <AudioPlayerDOM src={this.state.sourceFile} />
           <audio id="audio-one" />
           <Link to="/counter">to Counter</Link><br />
           <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
           <button onClick={readFile.bind(this, 'Yo')}>Read</button>
+          <button onClick={this.changeSourceFile.bind(this)}>Change Source</button>
           <button onClick={this.getAudio.bind(this)}>Record</button>
           <button onClick={this.stop.bind(this)}>Stop</button>
           <ul style={{ height: 400, overflow: 'scroll' }}>
@@ -310,7 +325,7 @@ export default class Home extends Component {
                     width: 300
                   }}
                   key={index}
-                >{file.name}<audio src={audioFile(file.name)} controls="true" loop="loop" />{file.name}<button onClick={this.deleteAudio.bind(this, audioFile(file.name))}>Delete</button></li>
+                >{file.name}<audio src={audioFile(file.name + '.webm')} controls="true" loop="loop" />{file.name}<button onClick={this.deleteAudio.bind(this, audioFile(file.name + '.webm'))}>Delete</button></li>
               );
             })}
           </ul>
