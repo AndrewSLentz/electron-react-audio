@@ -206,7 +206,7 @@ export default class Home extends Component {
           name: id,
           description: 'This is a test',
           createdAt: 'Today',
-          // isRecording: true
+          isRecording: true
         };
         console.log('inserting audio:');
         console.dir(obj);
@@ -230,7 +230,14 @@ export default class Home extends Component {
             if (err) {
               console.log('err', err);
             } else {
-              this.getAudioMetadata();
+              return column.findOne(id).exec().then(doc => {
+                doc.set('isRecording', false);
+                return doc.save().then(() => {
+                  console.log(doc.get('isRecording'));
+                  this.getAudioMetadata();
+                });
+              });
+              
               return console.log({ status: 'success' });
             }
           });
@@ -338,7 +345,7 @@ export default class Home extends Component {
                     width: 300
                   }}
                   key={index}
-                >{fileRx.get('name')}<AudioPlayerDOM src={audioFile(`${fileRx.get('name')}.webm`)} />{fileRx.get('name')}<button onClick={this.deleteAudio.bind(this, fileRx)}>Delete</button></li>
+                >{fileRx.get('name')}<AudioPlayerDOM isSourceAvailable={!fileRx.get('isRecording')} src={audioFile(`${fileRx.get('name')}.webm`)} />{fileRx.get('name')}<button onClick={this.deleteAudio.bind(this, fileRx)}>Delete</button></li>
               );
             })}
           </ul>

@@ -24,6 +24,9 @@ export default class AudioPlayerDOM extends Component {
       // Cause the audio element to load the new source
       audio.load();
     }
+    if (nextProps.isSourceAvailable) {
+      audio.load();
+    }
   }
   render() {
     return (
