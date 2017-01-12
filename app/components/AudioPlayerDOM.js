@@ -1,5 +1,8 @@
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom';
+
+const aud = new Audio();
+
 /**
  * Use case: audio player with dynamic source in react
  *
@@ -28,10 +31,11 @@ export default class AudioPlayerDOM extends Component {
       audio.load();
     }
   }
+
   render() {
     return (
       <div>
-        <audio controls>
+        <audio id={this.props.playerId} controls>
           <source src={this.props.src} />
         </audio>
       </div>
