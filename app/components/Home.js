@@ -3,6 +3,7 @@
 import React, {Component} from 'react';
 import {Link} from 'react-router';
 import Wavesurfer from 'react-wavesurfer';
+import NameHandler from './NameHandler'
 
 // For working with files
 import fs from 'fs-extra';
@@ -38,38 +39,54 @@ RxDB.plugin(pouchReplication);
 // This is a model to describe a single audio file in rxdb
 const audioSchema = {
   title: 'audio schema',
-  description: 'describes a simple audio file',
+  description: 'describes a simple audio project',
   type: 'object',
   properties: {
-    name: {
+    id: {
       type: 'string',
       primary: 'true'
     },
-    description: {
+    projectName: {
       type: 'string'
     },
-    createdAt: {
-      type: 'string'
-    },
-    isRecording: {
-      type: 'boolean'
-    },
-    isActive: {
-      type: 'boolean'
+    audioFiles: {
+      type: 'array',
+      item: {
+        properties: {
+          track: {
+            type: 'string'
+          },
+          name: {
+            type: 'string'
+          },
+          description: {
+            type: 'string'
+          },
+          createdAt: {
+            type: 'string'
+          },
+          isRecording: {
+            type: 'boolean'
+          },
+          isActive: {
+            type: 'boolean'
+          }
+        }
+      }
     }
-  },
-  required: ['createdAt']
+  }
 };
 
 const schemaHash = hash(audioSchema);
 const lastSchemaHash = localStorage.getItem('lastSchemaHash');
-if (lastSchemaHash !== schemaHash) {
+if (lastSchemaHash !== schemaHash && lastSchemaHash != null) {
   localStorage.setItem('lashSchemaHash', schemaHash);
   console.log('schema changed! the world was deleted!');
 }
 
 let database,
-  column;
+  column,
+  projId;
 
 // Helper to get paths of files in the electron audio directory
 const audioFile = (theFilename) => path.join(makeElectronPath('audio'), theFilename);
@@ -125,7 +142,9 @@ export default class Home extends Component {
       mediaStream: {},
       mediaRecorder: {},
       files: [],
-      audioMetadata: []
+      audioMetadata: [],
+      isRecording: false,
+      projects: []
     };
   }
   componentDidMount() {
@@ -139,22 +158,25 @@ export default class Home extends Component {
       column = col;
       return column;
     })
-    // .then((col) => {
-    //   console.log('DatabaseService: sync');
-    //   col.sync(`${syncURL}hero/`);
-    //   return col;
-    // })
       .then((col) => {
-      return col.query().sort({name: 1}).$.subscribe((audios) => {
-        if (!audios) {
-          // heroesList.innerHTML = 'Loading..';
-          return;
+      return col.query().$.subscribe((projects) => {
+        console.log(projects);
+        if (projects == null) {
+          projId = uuid.v4()
+          column.insert({projectName: 'blank', id: projId, audioFiles: []}).then(()=> {
+            console.log('empty project inserted')
+          }).catch((e)=> {
+            console.error(e);
+          });
+        } else {
+          console.log('observable fired');
+          this.setState({projects: projects});
+          console.dir(projects);
         }
-        console.log('observable fired');
-        this.setState({audioMetadata: audios});
-        console.dir(audios);
       });
-    }).catch((err) => {
+    })
+    .catch((err) => {
+      console.error(err);
       database.destroy().then(() => {
         // database destroyed
         console.log('there was a conflict in the schema, so I deleted the world')
@@ -179,6 +201,8 @@ export default class Home extends Component {
     });
   }
   getAudio() {
+    //show recording indicator
+    this.setState({isRecording: true});
     // Get audio using the user's microphone
     window.navigator.mediaDevices.getUserMedia({audio: true, video: false}).then((mediaStream) => {
       // Use a media recorder to record the stream
@@ -194,16 +218,22 @@ export default class Home extends Component {
       };
       // When the media recorder is stopped, get the final audio
       mediaRecorder.onstop = () => {
-        const obj = {
-          name: id,
-          description: 'This is a test',
-          createdAt: 'Today',
-          isRecording: true,
-          isActive: true
-        };
+        const arr = [
+          {
+            track: '',
+            name: id,
+            description: 'This is a test',
+            createdAt: 'Today',
+            isRecording: true,
+            isActive: true
+          }
+        ];
         console.log('inserting audio:');
-        console.dir(obj);
-        column.insert(obj);
+        console.dir(arr);
+        column.find().where('id').eq(projId).exec().then((projects) => {
+          console.log(projects);
+          return projects[0].set('audioFiles', arr).save();
+        })
         console.log('data available after MediaRecorder.stop() called.');
 
         // Take all of the chunks of bytes and put them together into a blob
@@ -271,6 +301,8 @@ export default class Home extends Component {
     }); // always check for errors at the end.
   }
   stop() {
+    // hide recording indicator
+    this.setState({isRecording: false});
     // Stop the media recorder
     this.state.mediaRecorder.stop();
 
@@ -278,6 +310,7 @@ export default class Home extends Component {
     this.state.mediaStream.getAudioTracks().map((track) => {
       // Stop each track
       track.stop();
+      this.setState({track: ''});
       return track;
     });
 
@@ -287,7 +320,7 @@ export default class Home extends Component {
     this.state.audioElement.currentTime = 0;
   }
   deleteAudio(fileRx) {
-    var del = confirm('Delete this track?');
+    var del = confirm('Delete ' + fileRx.get('track') + '?');
     if (del === true) {
       const file = audioFile(`${fileRx.get('name')}.webm`);
       fileRx.remove();
@@ -311,6 +344,9 @@ export default class Home extends Component {
       }
     });
   }
+  projectNameChange(fileRx, e) {
+    fileRx.set('projectName')
+  };
   render() {
     return (
       <div style={{
@@ -318,22 +354,92 @@ export default class Home extends Component {
         justifyContent: 'center'
       }}>
         <div className={styles.container}>
-          <h2>Band Together</h2>
+          <div className="banner" style={{
+            backgroundColor: '#2F80ED'
+          }}>
+            <h2>Band Together</h2>
+            <h3>A Collaborative Writing Tool for Musicians</h3>
+          </div>
           <audio id="audio-one"/>
           <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
           <button onClick={readFile.bind(this, 'Yo')}>Read</button>
-          <button onClick={this.getAudio.bind(this)}>Record</button>
-          <button onClick={this.startPlayer.bind(this)}>Play Selected</button>
-          <button onClick={this.stop.bind(this)}>Stop</button>
+          <i className="fa fa-microphone" style={{
+            color: 'green',
+            fontSize: '25px',
+            margin: '.5rem',
+            display: this.state.isRecording
+              ? 'none'
+              : 'inline-block'
+          }} onClick={this.getAudio.bind(this)}/>
+          <i className="fa fa-microphone-slash" style={{
+            color: 'red',
+            fontSize: '25px',
+            margin: '.5rem',
+            display: this.state.isRecording
+              ? 'inline-block'
+              : 'none'
+          }} onClick={this.stop.bind(this)}/>
+          <i className="fa fa-play" onClick={this.startPlayer.bind(this)} style={{
+            color: 'black',
+            fontSize: '25px',
+            margin: '.5rem'
+          }}/>
+          <i className="fa fa-floppy-o" style={{
+            fontSize: '25px',
+            margin: '.5rem'
+          }}/>
+          <div className="blink" style={{
+            display: this.state.isRecording
+              ? 'block'
+              : 'none'
+          }}>
+            <i className="fa fa-circle" id="blink" style={{
+              color: 'red',
+              fontSize: '20px',
+              margin: '.5rem'
+            }}/>
+          </div>
           <ul style={{
-            height: 400,
+            height: '538px',
             overflow: 'scroll',
             paddingLeft: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
+            marginTop: 0
           }}>
-            {this.state.audioMetadata.map((fileRx, index) => {
+            {this.state.projects.map((projectRx, index) => {
+              const audioFiles = projectRx.get('audioFiles');
+              console.log(audioFiles);
+              audioFiles.map((fileRx, i) => {
+                console.log(fileRx.name);
+                console.log('name is ', fileRx.name);
+                console.log(audioFile(fileRx.name + '.webm'))
+                return (
+                  <li style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '110px',
+                    background: '#fff',
+                    margin: '0 auto .5rem auto',
+                    color: '#333',
+                    width: 300
+                  }} key={index}>
+                    <input type="checkbox" defaultChecked style={{
+                      position: 'relative',
+                      left: '-2rem',
+                      top: '2.5rem'
+                    }} onChange={this.playerActive.bind(this, fileRx)}/>
+                    <i className="fa fa-times" onClick={this.deleteAudio.bind(this, fileRx)} style={{
+                      width: '20px',
+                      color: 'red',
+                      position: 'relative',
+                      left: '19rem',
+                      top: '1.5rem',
+                      cursor: 'pointer'
+                    }}/>
+                    <NameHandler fileRx={fileRx} />
+                    <AudioPlayerDOM playerId={'player' + fileRx.name} isSourceAvailable={!fileRx.isRecording} src={audioFile(fileRx.name + '.webm')} />
+                  </li>
+                );
+              })
               // const p = function(proxyObj) {
               //   return new Proxy({}, {
               //     get: (target, name) => {
@@ -342,44 +448,10 @@ export default class Home extends Component {
               //   });
               // };
               // const file = p(fileRx);
-              console.log('name is ', fileRx.get('name'));
-              console.log(audioFile(`${fileRx.get('name')}.webm`))
-              return (
-                <li style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100px',
-                  background: '#fff',
-                  margin: '0 0 .5rem 0',
-                  color: '#333',
-                  width: 300
-                }} key={index}>
-                  <input type="checkbox" defaultChecked style={{
-                    position: 'relative',
-                    left: '-2rem',
-                    top: '2.5rem'
-                  }} onChange={this.playerActive.bind(this, fileRx)}/>
-                  <input type="text" placeholder='name track' style={{
-                    margin: '.25rem',
-                    textAlign: 'center'
-                  }}/>
-                  <AudioPlayerDOM playerId={'player' + fileRx.get('name')} isSourceAvailable={!fileRx.get('isRecording')} src={audioFile(`${fileRx.get('name')}.webm`)}/>
-                  <button onClick={this.deleteAudio.bind(this, fileRx)} style={{
-                    backgroundColor: 'red',
-                    borderRadius: '5px',
-                    width: '6rem',
-                    paddingBottom: '15px',
-                    margin: '0 auto'
-                  }}>Delete Track</button>
-                  <div>
-                    <Wavesurfer audioFile={'/Users/andrew_s_lentz/Projects/electron-react-audio/node_modules/electron/dist/Electron.app/Contents/Resources/audio/8667d9e2-3fe7-4b90-85ad-0fd4700eee5a.webm'} pos={this.state.pos} onPosChange={this.handlePosChange} playing={this.state.playing}/>
-                  </div>
-                </li>
-              );
             })}
           </ul>
         </div>
       </div>
-    );
+    )
   }
 }

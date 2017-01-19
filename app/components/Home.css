@@ -1,11 +1,52 @@
+@font-face {
+    font-family: cbgbFont;
+    src: url(./cbgbfont/CBGBFont.ttf);
+}
+
+html, body {
+  margin: 0;
+}
+
 .container {
+  width: 100%;
   text-align: center;
 }
 
 .container h2 {
-  font-size: 5rem;
+  font-family: 'cbgbFont';
+  font-size: 3.5rem;
+  color: black;
+}
+
+.container h3 {
+  font-family: 'Londrina Sketch', cursive;
+  margin: 0 0 .5rem 0;
+  color: black;
+  font-size: 2rem;
+  padding-bottom: .25rem;
 }
 
 .container a {
   font-size: 1.4rem;
+}
+
+.blink {
+  animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+  50% { opacity: 0; }
+}
+
+audio {
+    background-color: #95B9C7;
+}
+
+audio::-webkit-media-controls-panel {
+  color: red;
+}
+
+audio::-webkit-media-controls-timeline-container {
+  color: red;
+  background-color: blue;
 }
