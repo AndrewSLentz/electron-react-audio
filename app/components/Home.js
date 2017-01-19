@@ -163,6 +163,7 @@ export default class Home extends Component {
         console.log(projects);
         if (projects == null) {
           projId = uuid.v4()
+          console.log('creating a new empty project');
           column.insert({projectName: 'blank', id: projId, audioFiles: []}).then(()=> {
             console.log('empty project inserted')
           }).catch((e)=> {
@@ -250,8 +251,22 @@ export default class Home extends Component {
             if (err) {
               console.log('err', err);
             } else {
+              return column.find().where('id').eq(projId).exec().then((projects) => {
+                console.log(projects);
+                var afs = projects[0].get('audioFiles');
+                var newAfs = afs.map((af) => {
+                  var newAf;
+                  if (af.name === id) {
+                    newAf = Object.assign(af, { isRecording: false });
+                  } else {
+                    newAf = af;
+                  }
+                  return newAf;
+                });
+                return projects[0].set('audioFiles', newAfs).save();
+              })
               return column.findOne(id).exec().then(doc => {
-                doc.set('isRecording', false);
+                // The project
                 return doc.save().then(() => {
                   console.log(doc.get('isRecording'));
                   this.getAudioMetadata();
@@ -407,8 +422,8 @@ export default class Home extends Component {
           }}>
             {this.state.projects.map((projectRx, index) => {
               const audioFiles = projectRx.get('audioFiles');
-              console.log(audioFiles);
-              audioFiles.map((fileRx, i) => {
+              console.log(projectRx.get('id'), 'has audio files', audioFiles);
+              return audioFiles.map((fileRx, i) => {
                 console.log(fileRx.name);
                 console.log('name is ', fileRx.name);
                 console.log(audioFile(fileRx.name + '.webm'))
@@ -435,7 +450,7 @@ export default class Home extends Component {
                       top: '1.5rem',
                       cursor: 'pointer'
                     }}/>
-                    <NameHandler fileRx={fileRx} />
+                    {/* <NameHandler fileRx={fileRx} /> */}
                     <AudioPlayerDOM playerId={'player' + fileRx.name} isSourceAvailable={!fileRx.isRecording} src={audioFile(fileRx.name + '.webm')} />
                   </li>
                 );
