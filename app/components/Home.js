@@ -3,6 +3,7 @@
 import React, {Component} from 'react';
 import {Link} from 'react-router';
 import Wavesurfer from 'react-wavesurfer';
+import NameHandler from './NameHandler'
 
 // For working with files
 import fs from 'fs-extra';
@@ -179,6 +180,8 @@ export default class Home extends Component {
     });
   }
   getAudio() {
+    //show recording indicator
+    this.setState({isRecording: true});
     // Get audio using the user's microphone
     window.navigator.mediaDevices.getUserMedia({audio: true, video: false}).then((mediaStream) => {
       // Use a media recorder to record the stream
@@ -190,7 +193,7 @@ export default class Home extends Component {
       const id = uuid.v4();
 
       mediaRecorder.onstart = () => {
-        this.startPlayer();
+        setTimeout(this.startPlayer(), 1800);
       };
       // When the media recorder is stopped, get the final audio
       mediaRecorder.onstop = () => {
@@ -271,6 +274,8 @@ export default class Home extends Component {
     }); // always check for errors at the end.
   }
   stop() {
+    // hide recording indicator
+   this.setState({isRecording: false});
     // Stop the media recorder
     this.state.mediaRecorder.stop();
 
@@ -318,20 +323,56 @@ export default class Home extends Component {
         justifyContent: 'center'
       }}>
         <div className={styles.container}>
-          <h2>Band Together</h2>
+          <div className="banner" style={{
+            backgroundColor: '#2F80ED'
+          }}>
+            <h2>Band Together</h2>
+            <h3>A Collaborative Writing Tool for Musicians</h3>
+          </div>
           <audio id="audio-one"/>
-          <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
-          <button onClick={readFile.bind(this, 'Yo')}>Read</button>
-          <button onClick={this.getAudio.bind(this)}>Record</button>
-          <button onClick={this.startPlayer.bind(this)}>Play Selected</button>
-          <button onClick={this.stop.bind(this)}>Stop</button>
+          {/* <button onClick={writeFileSync.bind(this, 'Yo', 'OH HAIII')}>Write</button>
+          <button onClick={readFile.bind(this, 'Yo')}>Read</button> */}
+          <i className="fa fa-microphone" style={{
+            color: 'green',
+            fontSize: '25px',
+            margin: '.5rem',
+            display: this.state.isRecording
+              ? 'none'
+              : 'inline-block'
+          }} onClick={this.getAudio.bind(this)}/>
+          <i className="fa fa-microphone-slash" style={{
+            color: 'red',
+            fontSize: '25px',
+            margin: '.5rem',
+            display: this.state.isRecording
+              ? 'inline-block'
+              : 'none'
+          }} onClick={this.stop.bind(this)}/>
+          <i className="fa fa-play" onClick={this.startPlayer.bind(this)} style={{
+            color: 'black',
+            fontSize: '25px',
+            margin: '.5rem'
+          }}/>
+          <i className="fa fa-floppy-o" style={{
+            fontSize: '25px',
+            margin: '.5rem'
+          }}/>
+          <div className="blink" style={{
+            display: this.state.isRecording
+              ? 'block'
+              : 'none'
+          }}>
+            <i className="fa fa-circle" id="blink" style={{
+              color: 'red',
+              fontSize: '20px',
+              margin: '.5rem'
+            }}/>
+          </div>
           <ul style={{
-            height: 400,
+            height: '538px',
             overflow: 'scroll',
             paddingLeft: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
+            margin: '0 auto'
           }}>
             {this.state.audioMetadata.map((fileRx, index) => {
               // const p = function(proxyObj) {
@@ -348,9 +389,9 @@ export default class Home extends Component {
                 <li style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  height: '100px',
+                  height: '110px',
                   background: '#fff',
-                  margin: '0 0 .5rem 0',
+                  margin: '0 auto .5rem auto',
                   color: '#333',
                   width: 300
                 }} key={index}>
@@ -359,21 +400,16 @@ export default class Home extends Component {
                     left: '-2rem',
                     top: '2.5rem'
                   }} onChange={this.playerActive.bind(this, fileRx)}/>
-                  <input type="text" placeholder='name track' style={{
-                    margin: '.25rem',
-                    textAlign: 'center'
+                  <i className="fa fa-times" onClick={this.deleteAudio.bind(this, fileRx)} style={{
+                    width: '20px',
+                    color: 'red',
+                    position: 'relative',
+                    left: '19rem',
+                    top: '1.5rem',
+                    cursor: 'pointer'
                   }}/>
+                  <NameHandler fileRx={fileRx}/>
                   <AudioPlayerDOM playerId={'player' + fileRx.get('name')} isSourceAvailable={!fileRx.get('isRecording')} src={audioFile(`${fileRx.get('name')}.webm`)}/>
-                  <button onClick={this.deleteAudio.bind(this, fileRx)} style={{
-                    backgroundColor: 'red',
-                    borderRadius: '5px',
-                    width: '6rem',
-                    paddingBottom: '15px',
-                    margin: '0 auto'
-                  }}>Delete Track</button>
-                  <div>
-                    <Wavesurfer audioFile={'/Users/andrew_s_lentz/Projects/electron-react-audio/node_modules/electron/dist/Electron.app/Contents/Resources/audio/8667d9e2-3fe7-4b90-85ad-0fd4700eee5a.webm'} pos={this.state.pos} onPosChange={this.handlePosChange} playing={this.state.playing}/>
-                  </div>
                 </li>
               );
             })}
