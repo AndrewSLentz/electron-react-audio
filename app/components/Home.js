@@ -46,6 +46,12 @@ const audioSchema = {
       type: 'string',
       primary: 'true'
     },
+    version: {
+      type: 'number'
+    },
+    track: {
+      type: 'string'
+    },
     description: {
       type: 'string'
     },
@@ -137,6 +143,7 @@ export default class Home extends Component {
       database = db;
       return db.collection('audio', audioSchema);
     }).then((col) => {
+      console.log(col);
       column = col;
       return column;
     })
@@ -156,6 +163,7 @@ export default class Home extends Component {
         console.dir(audios);
       });
     }).catch((err) => {
+      console.error(err);
       database.destroy().then(() => {
         // database destroyed
         console.log('there was a conflict in the schema, so I deleted the world')
@@ -193,12 +201,14 @@ export default class Home extends Component {
       const id = uuid.v4();
 
       mediaRecorder.onstart = () => {
-        setTimeout(this.startPlayer(), 1800);
+        this.startPlayer();
       };
       // When the media recorder is stopped, get the final audio
       mediaRecorder.onstop = () => {
         const obj = {
           name: id,
+          version: 1,
+          track: '',
           description: 'This is a test',
           createdAt: 'Today',
           isRecording: true,
@@ -206,6 +216,7 @@ export default class Home extends Component {
         };
         console.log('inserting audio:');
         console.dir(obj);
+        console.log(column);
         column.insert(obj);
         console.log('data available after MediaRecorder.stop() called.');
 
@@ -292,7 +303,7 @@ export default class Home extends Component {
     this.state.audioElement.currentTime = 0;
   }
   deleteAudio(fileRx) {
-    var del = confirm('Delete this track?');
+    var del = confirm('Delete ' + fileRx.get('track') + '?');
     if (del === true) {
       const file = audioFile(`${fileRx.get('name')}.webm`);
       fileRx.remove();
@@ -310,9 +321,9 @@ export default class Home extends Component {
     console.log(fileRx.get('isActive'));
   }
   startPlayer() {
-    this.state.audioMetadata.map((fileRx) => {
+    this.state.audioMetadata.map((fileRx, i) => {
       if (fileRx.get('isActive')) {
-        document.getElementById('player' + fileRx.get('name')).play();
+        setTimeout(document.getElementById('player' + fileRx.get('name')).play(), (i < 0 ? 1000 : 0));
       }
     });
   }
