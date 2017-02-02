@@ -321,13 +321,14 @@ export default class Home extends Component {
     console.log(fileRx.get('isActive'));
   }
   startPlayer() {
+    console.log(this.state.audioMetadata);
     this.state.audioMetadata.map((fileRx, i) => {
       if (fileRx.get('isActive')) {
         let audioTrack = document.getElementById('player' + fileRx.get('name'));
         if (i > 0) {
           audioTrack.play();
         } else {
-          setTimeout(audioTrack.play(), 1000);
+          setTimeout( function () { audioTrack.play()}, 100);
         }
       }
     });
