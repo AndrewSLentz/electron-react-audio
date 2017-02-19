@@ -331,7 +331,10 @@ export default class Home extends Component {
     this.state.audioMetadata.map((fileRx) => {
       if (fileRx.get('isActive')) {
         document.getElementById('player' + fileRx.get('name')).play();
+<<<<<<< HEAD
 
+=======
+>>>>>>> e24b5e36727db5a2343cad9ad31d3b91cdb30c75
       }
     });
   }
