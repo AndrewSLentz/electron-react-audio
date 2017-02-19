@@ -189,7 +189,8 @@ export default class Home extends Component {
   }
   getAudio() {
     //show recording indicator
-    this.setState({isRecording: true});
+    this.setState({ isRecording: true});
+    console.log(this.state.isRecording);
     // Get audio using the user's microphone
     window.navigator.mediaDevices.getUserMedia({audio: true, video: false}).then((mediaStream) => {
       // Use a media recorder to record the stream
@@ -277,16 +278,16 @@ export default class Home extends Component {
       // Store the media stream in state, we'll need this when
       // the user decides to stop recording and we want to get
       // a blob representing the recording
-      this.setState({mediaRecorder, mediaStream, audioElement: audio});
+      this.setState({ mediaRecorder, mediaStream, audioElement: audio });
 
-      return {mediaStream, audioElement: audio};
+      return { mediaStream, audioElement: audio };
     }).catch((err) => {
       console.error(`${err.name} : ${err.message}`);
     }); // always check for errors at the end.
   }
   stop() {
     // hide recording indicator
-   this.setState({isRecording: false});
+    this.setState({ isRecording: false });
     // Stop the media recorder
     this.state.mediaRecorder.stop();
 
@@ -303,7 +304,7 @@ export default class Home extends Component {
     this.state.audioElement.currentTime = 0;
   }
   deleteAudio(fileRx) {
-    var del = confirm('Delete ' + fileRx.get('track') + '?');
+    const del = confirm( 'Delete ' + fileRx.get('track') + '?');
     if (del === true) {
       const file = audioFile(`${fileRx.get('name')}.webm`);
       fileRx.remove();
