@@ -46,6 +46,9 @@ const audioSchema = {
       type: 'string',
       primary: 'true'
     },
+    track: {
+      type: 'string'
+    },
     description: {
       type: 'string'
     },
@@ -293,7 +296,9 @@ export default class Home extends Component {
     this.state.audioElement.currentTime = 0;
   }
   deleteAudio(fileRx) {
+
     const del = confirm( 'Delete ' + fileRx.get('track') + '?');
+
     if (del === true) {
       const file = audioFile(`${fileRx.get('name')}.webm`);
       fileRx.remove();
@@ -311,6 +316,7 @@ export default class Home extends Component {
     console.log(fileRx.get('isActive'));
   }
   startPlayer() {
+
 // <<<<<<< HEAD
 //     console.log(this.state.audioMetadata);
 //     this.state.audioMetadata.map((fileRx, i) => {
