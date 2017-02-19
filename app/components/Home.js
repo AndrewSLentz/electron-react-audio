@@ -46,9 +46,6 @@ const audioSchema = {
       type: 'string',
       primary: 'true'
     },
-    version: {
-      type: 'number'
-    },
     track: {
       type: 'string'
     },
@@ -143,7 +140,6 @@ export default class Home extends Component {
       database = db;
       return db.collection('audio', audioSchema);
     }).then((col) => {
-      console.log(col);
       column = col;
       return column;
     })
@@ -163,7 +159,6 @@ export default class Home extends Component {
         console.dir(audios);
       });
     }).catch((err) => {
-      console.error(err);
       database.destroy().then(() => {
         // database destroyed
         console.log('there was a conflict in the schema, so I deleted the world')
@@ -189,7 +184,8 @@ export default class Home extends Component {
   }
   getAudio() {
     //show recording indicator
-    this.setState({isRecording: true});
+    this.setState({ isRecording: true});
+    console.log(this.state.isRecording);
     // Get audio using the user's microphone
     window.navigator.mediaDevices.getUserMedia({audio: true, video: false}).then((mediaStream) => {
       // Use a media recorder to record the stream
@@ -201,14 +197,12 @@ export default class Home extends Component {
       const id = uuid.v4();
 
       mediaRecorder.onstart = () => {
-        this.startPlayer();
+        setTimeout(this.startPlayer(), 1800);
       };
       // When the media recorder is stopped, get the final audio
       mediaRecorder.onstop = () => {
         const obj = {
           name: id,
-          version: 1,
-          track: '',
           description: 'This is a test',
           createdAt: 'Today',
           isRecording: true,
@@ -216,7 +210,6 @@ export default class Home extends Component {
         };
         console.log('inserting audio:');
         console.dir(obj);
-        console.log(column);
         column.insert(obj);
         console.log('data available after MediaRecorder.stop() called.');
 
@@ -277,16 +270,16 @@ export default class Home extends Component {
       // Store the media stream in state, we'll need this when
       // the user decides to stop recording and we want to get
       // a blob representing the recording
-      this.setState({mediaRecorder, mediaStream, audioElement: audio});
+      this.setState({ mediaRecorder, mediaStream, audioElement: audio });
 
-      return {mediaStream, audioElement: audio};
+      return { mediaStream, audioElement: audio };
     }).catch((err) => {
       console.error(`${err.name} : ${err.message}`);
     }); // always check for errors at the end.
   }
   stop() {
     // hide recording indicator
-   this.setState({isRecording: false});
+    this.setState({ isRecording: false });
     // Stop the media recorder
     this.state.mediaRecorder.stop();
 
@@ -303,7 +296,9 @@ export default class Home extends Component {
     this.state.audioElement.currentTime = 0;
   }
   deleteAudio(fileRx) {
-    var del = confirm('Delete ' + fileRx.get('track') + '?');
+
+    const del = confirm( 'Delete ' + fileRx.get('track') + '?');
+
     if (del === true) {
       const file = audioFile(`${fileRx.get('name')}.webm`);
       fileRx.remove();
@@ -321,9 +316,22 @@ export default class Home extends Component {
     console.log(fileRx.get('isActive'));
   }
   startPlayer() {
-    this.state.audioMetadata.map((fileRx, i) => {
+
+// <<<<<<< HEAD
+//     console.log(this.state.audioMetadata);
+//     this.state.audioMetadata.map((fileRx, i) => {
+//       if (fileRx.get('isActive')) {
+//         let audioTrack = document.getElementById('player' + fileRx.get('name'));
+//         if (i > 0) {
+//           audioTrack.play();
+//         } else {
+//           setTimeout( function () { audioTrack.play()}, 100);
+//         }
+// =======
+    this.state.audioMetadata.map((fileRx) => {
       if (fileRx.get('isActive')) {
-        setTimeout(document.getElementById('player' + fileRx.get('name')).play(), (i < 0 ? 1000 : 0));
+        document.getElementById('player' + fileRx.get('name')).play();
+
       }
     });
   }
